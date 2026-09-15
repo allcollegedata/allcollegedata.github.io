@@ -273,130 +273,314 @@ render();
 </script>
 
 <script>
-(function(){
-const API="https://script.google.com/macros/s/AKfycbwGxoIjzfZDizxwnZj6A7EPp7Imv8Q5Nf1mXtVWlZuowkand03_zkN3bi9F10j1h43_/exec";
-const PASS="Naveen#@6795";
-const FIELDS=["name","type","gender","location","seats","inc","cutoff","collegeFee","universityFee","otherCharges","hostel","hostelFor","hostelLocation","hostelFee","hostelReview","teaching","study","academic","academicReview","clinical","clinicalDuration","clinicalHospitals","medical","psychiatric","otherClinical","management","strictness","managementRating","discipline","celebrations","experience","cleanliness","water","lighting","washrooms","classrooms","library","labs","bus","transport","busRoutes","auto","nearest","transportRating","transportReview","overall","recommend","campusRating","positive","negative","important","published"];
-let rows=[], taps=0, tapTimer=null;
+/* ================================
+   SUPABASE COLLEGE DATABASE + ADMIN
+   ================================ */
 
-document.getElementById("secretAdminBtn").addEventListener("click",function(){
+const FIELDS = [
+  "name","type","gender","location","seats","inc","cutoff",
+  "collegeFee","universityFee","otherCharges","hostel","hostelFor",
+  "hostelLocation","hostelFee","hostelReview","teaching","study",
+  "academic","academicReview","clinical","clinicalDuration",
+  "clinicalHospitals","medical","psychiatric","otherClinical",
+  "management","strictness","managementRating","discipline",
+  "celebrations","experience","cleanliness","water","lighting",
+  "washrooms","classrooms","library","labs","bus","transport",
+  "busRoutes","auto","nearest","transportRating","transportReview",
+  "overall","recommend","campusRating","positive","negative",
+  "important","published"
+];
+
+let rows = [];
+let taps = 0;
+let tapTimer = null;
+
+/* Five taps on ⚙️ */
+document.getElementById("secretAdminBtn").addEventListener("click", () => {
   taps++;
   clearTimeout(tapTimer);
-  tapTimer=setTimeout(()=>taps=0,1300);
-  if(taps===5){taps=0;openAdmin();}
+  tapTimer = setTimeout(() => taps = 0, 1300);
+
+  if (taps === 5) {
+    taps = 0;
+    openAdmin();
+  }
 });
 
-window.openAdmin=function(){
-  document.getElementById("secretAdminModal").style.display="block";
+window.openAdmin = async function () {
+  document.getElementById("secretAdminModal").style.display = "block";
   document.getElementById("saPass").focus();
-};
-window.closeAdmin=function(){document.getElementById("secretAdminModal").style.display="none"};
-window.saLogin=function(){
-  if(document.getElementById("saPass").value!==PASS){document.getElementById("saLoginMsg").textContent="Wrong password.";return}
-  document.getElementById("saLogin").style.display="none";
-  document.getElementById("saArea").style.display="block";
-  saLoad();
-};
-window.saLogout=function(){
-  document.getElementById("saArea").style.display="none";
-  document.getElementById("saLogin").style.display="block";
-  document.getElementById("saPass").value="";
-};
-function message(x){document.getElementById("saMsg").textContent=x}
 
-window.saLoad=async function(){
-  message("Loading...");
-  try{
-    const r=await fetch(API+"?action=list&key="+encodeURIComponent(PASS),{cache:"no-store"});
-    const j=JSON.parse(await r.text());
-    if(!j.success)throw Error(j.message||"Load failed");
-    rows=j.data||[]; renderAdmin(); message("Loaded "+rows.length+" college(s).");
-  }catch(e){message("Load failed: "+e.message)}
-};
+  const {
+    data: { session }
+  } = await db.auth.getSession();
 
-function safe(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-function renderAdmin(){
- document.getElementById("saList").innerHTML=rows.map((c,i)=>`<div class="saItem"><div><b>${safe(c.name)}</b><div style="font-size:11px;color:#738096">${safe(c.location||"")}</div></div><div><button class="saS" type="button" onclick="saEdit(${i})">Edit</button> <button class="saD" type="button" onclick="saDelete(${i})">Delete</button></div></div>`).join("")||"<div class='saMsg'>No colleges.</div>";
-}
-window.saEdit=function(i){
- const c=rows[i];document.getElementById("saOrig").value=c.name||"";
- FIELDS.forEach(f=>{const e=document.getElementById("f_"+f);if(e)e.value=c[f]??""});
- window.scrollTo({top:0,behavior:"smooth"});
-};
-window.saClear=function(){document.getElementById("saForm").reset();document.getElementById("saOrig").value="";document.getElementById("f_published").value="Yes"};
-function formData(){const d={};FIELDS.forEach(f=>{const e=document.getElementById("f_"+f);d[f]=e?e.value:""});return d}
-
-window.saSave=async function(ev){
- ev.preventDefault();const d=formData();message("Saving...");
- try{
-  const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"save",key:PASS,data:d})});
-  const j=JSON.parse(await r.text());if(!j.success)throw Error(j.message||"Save failed");
-  await saLoad();saClear();message(j.message||"Saved.");
-  if(typeof window.loadPublicColleges==="function")window.loadPublicColleges();
- }catch(e){message("Save failed: "+e.message)}
-};
-
-window.saDelete=async function(i){
- if(!confirm("Delete this college?\n\n"+rows[i].name))return;
- try{
-  const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"delete",key:PASS,name:rows[i].name})});
-  const j=JSON.parse(await r.text());if(!j.success)throw Error(j.message||"Delete failed");
-  await saLoad();if(typeof window.loadPublicColleges==="function")window.loadPublicColleges();
- }catch(e){message("Delete failed: "+e.message)}
-};
-
-window.toggleBulk=function(){
- const a=document.getElementById("saBulk"),b=document.getElementById("bulkBtns"),show=a.style.display==="none";
- a.style.display=show?"block":"none";b.style.display=show?"flex":"none";
-};
-window.saPasteImport=function(){saImportRaw(document.getElementById("saBulk").value)};
-window.saFileImport=function(input){
- const f=input.files&&input.files[0];if(!f)return;
- const r=new FileReader();r.onload=()=>saImportRaw(String(r.result||""));r.readAsText(f);input.value="";
-};
-function parseRaw(raw){
- try{const j=JSON.parse(raw);return Array.isArray(j)?j:(Array.isArray(j.data)?j.data:[j])}catch(e){}
- const m=String(raw).match(/const\s+COLLEGES\s*=\s*(\[[\s\S]*?\])\s*;?/);
- if(m){try{return Function('"use strict";return ('+m[1]+')')()}catch(e){}}
- throw Error("Use JSON array or HTML containing const COLLEGES = [...]");
-}
-async function saImportRaw(raw){
- let arr;try{arr=parseRaw(raw)}catch(e){message("Import failed: "+e.message);return}
- arr=arr.filter(c=>c&&String(c.name||"").trim());
- if(!arr.length){message("No valid colleges found.");return}
- if(!confirm("Import "+arr.length+" college(s)? Same-name records will be updated."))return;
- message("Importing...");
- let ok=0;
- for(const c of arr){
-   const d={};FIELDS.forEach(f=>d[f]=c[f]??"");if(!d.published)d.published="Yes";
-   try{
-    const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"save",key:PASS,data:d})});
-    const j=JSON.parse(await r.text());if(j.success)ok++;
-   }catch(e){}
- }
- document.getElementById("saBulk").value="";
- document.getElementById("saBulk").style.display="none";
- document.getElementById("bulkBtns").style.display="none";
- await saLoad();if(typeof window.loadPublicColleges==="function")window.loadPublicColleges();
- message("Imported "+ok+" of "+arr.length+" college(s).");
-}
-window.saExport=function(){
- const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(rows,null,2)],{type:"application/json"}));a.download="new-students-colleges-backup.json";a.click();
-};
-
-/* Live public data: API must support action=public-list. */
-window.loadPublicColleges=async function(){
- try{
-  const r=await fetch(API+"?action=public-list",{cache:"no-store"});
-  const j=JSON.parse(await r.text());
-  if(j.success&&Array.isArray(j.data)){
-   COLLEGES.splice(0,COLLEGES.length,...j.data.filter(c=>String(c.published||"Yes").toLowerCase()!=="no"));
-   render();
+  if (session) {
+    showAdmin();
   }
- }catch(e){}
 };
-window.addEventListener("load",()=>window.loadPublicColleges());
-})();
+
+window.closeAdmin = function () {
+  document.getElementById("secretAdminModal").style.display = "none";
+};
+
+window.saLogin = async function () {
+  const email = prompt("Enter your admin email:");
+
+  if (!email) return;
+
+  const password = document.getElementById("saPass").value;
+
+  if (!password) {
+    document.getElementById("saLoginMsg").textContent =
+      "Enter your password.";
+    return;
+  }
+
+  document.getElementById("saLoginMsg").textContent = "Logging in...";
+
+  const { data, error } = await db.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    document.getElementById("saLoginMsg").textContent =
+      "Login failed: " + error.message;
+    return;
+  }
+
+  showAdmin();
+};
+
+async function showAdmin() {
+  document.getElementById("saLogin").style.display = "none";
+  document.getElementById("saArea").style.display = "block";
+  document.getElementById("saPass").value = "";
+
+  await saLoad();
+}
+
+window.saLogout = async function () {
+  await db.auth.signOut();
+
+  document.getElementById("saArea").style.display = "none";
+  document.getElementById("saLogin").style.display = "block";
+};
+
+function message(text) {
+  document.getElementById("saMsg").textContent = text;
+}
+
+/* ================================
+   LOAD ADMIN DATA
+   ================================ */
+
+window.saLoad = async function () {
+  message("Loading...");
+
+  const { data, error } = await db
+    .from("colleges")
+    .select("*")
+    .order("id", { ascending: true });
+
+  if (error) {
+    message("Load failed: " + error.message);
+    return;
+  }
+
+  rows = data || [];
+  renderAdmin();
+
+  message("Loaded " + rows.length + " college(s).");
+};
+
+function safe(v) {
+  return String(v ?? "").replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[m]));
+}
+
+function renderAdmin() {
+  document.getElementById("saList").innerHTML =
+    rows.map((c, i) => `
+      <div class="saItem">
+        <div>
+          <b>${safe(c.name)}</b>
+          <div style="font-size:11px;color:#738096">
+            ${safe(c.location || "")}
+          </div>
+        </div>
+
+        <div>
+          <button class="saS"
+            type="button"
+            onclick="saEdit(${i})">
+            Edit
+          </button>
+
+          <button class="saD"
+            type="button"
+            onclick="saDelete(${i})">
+            Delete
+          </button>
+        </div>
+      </div>
+    `).join("") ||
+    "<div class='saMsg'>No colleges.</div>";
+}
+
+/* ================================
+   EDIT
+   ================================ */
+
+window.saEdit = function (i) {
+  const c = rows[i];
+
+  document.getElementById("saOrig").value = c.id || "";
+
+  FIELDS.forEach(f => {
+    const el = document.getElementById("f_" + f);
+
+    if (el) {
+      el.value = c[f] ?? "";
+    }
+  });
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+};
+
+window.saClear = function () {
+  document.getElementById("saForm").reset();
+  document.getElementById("saOrig").value = "";
+  document.getElementById("f_published").value = "Yes";
+};
+
+function formData() {
+  const d = {};
+
+  FIELDS.forEach(f => {
+    const el = document.getElementById("f_" + f);
+
+    if (el) {
+      d[f] = el.value;
+    }
+  });
+
+  return d;
+}
+
+/* ================================
+   SAVE / UPDATE
+   ================================ */
+
+window.saSave = async function (ev) {
+  ev.preventDefault();
+
+  const data = formData();
+  const originalId = document.getElementById("saOrig").value;
+
+  message("Saving...");
+
+  let result;
+
+  if (originalId) {
+    result = await db
+      .from("colleges")
+      .update(data)
+      .eq("id", originalId);
+  } else {
+    result = await db
+      .from("colleges")
+      .insert(data);
+  }
+
+  if (result.error) {
+    message("Save failed: " + result.error.message);
+    return;
+  }
+
+  await saLoad();
+  saClear();
+
+  message(
+    originalId
+      ? "College updated successfully."
+      : "College added successfully."
+  );
+
+  await loadPublicColleges();
+};
+
+/* ================================
+   DELETE
+   ================================ */
+
+window.saDelete = async function (i) {
+  const college = rows[i];
+
+  if (!confirm(
+    "Delete this college?\n\n" + college.name
+  )) {
+    return;
+  }
+
+  message("Deleting...");
+
+  const { error } = await db
+    .from("colleges")
+    .delete()
+    .eq("id", college.id);
+
+  if (error) {
+    message("Delete failed: " + error.message);
+    return;
+  }
+
+  await saLoad();
+  await loadPublicColleges();
+
+  message("College deleted.");
+};
+
+/* ================================
+   PUBLIC COLLEGES
+   ================================ */
+
+window.loadPublicColleges = async function () {
+  const { data, error } = await db
+    .from("colleges")
+    .select("*")
+    .eq("published", "Yes")
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("Supabase public load:", error);
+    return;
+  }
+
+  COLLEGES.splice(
+    0,
+    COLLEGES.length,
+    ...(data || [])
+  );
+
+  render();
+};
+
+window.addEventListener(
+  "load",
+  () => loadPublicColleges()
+);
+
+</script>
 </script>
 </body>
 </html>
